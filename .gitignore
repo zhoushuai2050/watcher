@@ -1,0 +1,12 @@
+bin/
+data/
+web/dist/assets/
+web/node_modules/
+web/tools/esbuild
+*.db
+*.db-shm
+*.db-wal
+web/.vendor/
+.env
+watcher.toml
+!deploy/watcher.toml

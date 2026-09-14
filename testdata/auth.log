@@ -1,0 +1,12 @@
+Sep 13 10:15:01 host sshd[1201]: Failed password for root from 203.0.113.10 port 54321 ssh2
+Sep 13 10:15:02 host sshd[1202]: Failed password for root from 203.0.113.10 port 54322 ssh2
+Sep 13 10:15:03 host sshd[1203]: Failed password for invalid user admin from 203.0.113.10 port 54323 ssh2
+Sep 13 10:15:04 host sshd[1204]: Invalid user ubuntu from 203.0.113.10 port 54324
+Sep 13 10:15:05 host sshd[1205]: Failed password for root from 203.0.113.10 port 54325 ssh2
+Sep 13 10:15:06 host sshd[1206]: Failed password for root from 203.0.113.10 port 54326 ssh2
+Sep 13 10:15:07 host sshd[1207]: Failed password for root from 203.0.113.10 port 54327 ssh2
+Sep 13 10:15:08 host sshd[1208]: Failed password for root from 203.0.113.10 port 54328 ssh2
+Sep 13 10:15:09 host sshd[1209]: Accepted publickey for alice from 198.51.100.20 port 22022 ssh2: RSA SHA256:abc
+Sep 13 10:15:10 host sshd[1210]: Failed password for root from 203.0.113.10 port 54329 ssh2
+Sep 13 10:15:11 host sshd[1211]: Accepted password for root from 203.0.113.10 port 54330 ssh2
+Sep 13 10:15:12 host systemd: Starting Session

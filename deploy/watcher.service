@@ -1,0 +1,24 @@
+[Unit]
+Description=Watcher host monitor
+After=network.target
+
+[Service]
+Type=simple
+User=watcher
+Group=watcher
+SupplementaryGroups=adm systemd-journal
+ExecStart=/usr/local/bin/watcher -config /etc/watcher/config.toml
+WorkingDirectory=/var/lib/watcher
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/watcher
+ReadOnlyPaths=/proc /sys /var/log
+PrivateTmp=true
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+id: watcher
+name: Watcher
+description: 本机资源、进程占用与攻击观测
+group: ops
+url: /Watcher/
+icon: activity
+runtime:
+  type: process
+  service: watcher
+health:
+  type: http
+  url: http://127.0.0.1:8020/api/health
+  timeout_ms: 2000

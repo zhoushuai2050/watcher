@@ -1,0 +1,27 @@
+listen = "127.0.0.1:8020"
+data_dir = "/var/lib/watcher"
+public_path = "/Watcher"
+admin_user = "admin"
+admin_password = "watcher"
+jwt_secret = "change-me-watcher-secret"
+jwt_days = 7
+nginx_log = "/var/log/nginx/access.log"
+fail2ban_log = "/var/log/fail2ban.log"
+kern_log = "/var/log/kern.log"
+listen_allow = ["tcp:22", "tcp:80", "tcp:443", "tcp:53", "udp:53", "tcp:8020", "tcp:8010", "tcp:8011"]
+
+[detect]
+cpu_pct = 90
+mem_pct = 90
+disk_pct = 90
+ssh_fail_count = 5
+cpu_sustain_sec = 120
+ssh_fail_window_sec = 600
+invalid_user_count = 5
+web_probe_count = 10
+web_fail_count = 12
+port_scan_ports = 12
+conn_flood_count = 80
+syn_recv_count = 64
+proc_cpu_pct = 80
+attack_ban_threshold = 3

@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import PageHeader from "../components/PageHeader";
 import { api } from "../lib/api";
 import { formatBytes, formatPct } from "../lib/format";
 import { usePoll } from "../lib/poll";
@@ -8,7 +7,7 @@ import type { ProcGroup, ProcRow } from "../lib/types";
 
 function hrefFor(name: string, container: string) {
   const q = container ? `container=${encodeURIComponent(container)}` : `name=${encodeURIComponent(name)}`;
-  return `/processes/view?${q}`;
+  return `/resources/view?${q}`;
 }
 
 type Payload = { items: ProcRow[]; groups: ProcGroup[] };
@@ -24,17 +23,15 @@ export default function ProcessesPage() {
   }, [data, sort]);
 
   return (
-    <div>
-      <PageHeader kicker="应用" title="进程占用" desc="按 cgroup 识别 systemd 服务和 Docker 容器。Watcher 自己也会出现在列表里。">
-        <div className="range-tabs">
-          <button className={sort === "cpu" ? "active" : ""} onClick={() => setSort("cpu")}>
-            CPU
-          </button>
-          <button className={sort === "rss" ? "active" : ""} onClick={() => setSort("rss")}>
-            内存
-          </button>
-        </div>
-      </PageHeader>
+    <div className="stack">
+      <div className="range-tabs">
+        <button className={sort === "cpu" ? "active" : ""} onClick={() => setSort("cpu")}>
+          CPU
+        </button>
+        <button className={sort === "rss" ? "active" : ""} onClick={() => setSort("rss")}>
+          内存
+        </button>
+      </div>
       {error ? <div className="error">{error}</div> : null}
       <div className="grid grid-2">
         <article className="card panel">

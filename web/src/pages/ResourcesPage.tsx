@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import Chart from "../components/Chart";
-import PageHeader from "../components/PageHeader";
 import { api } from "../lib/api";
 import { formatBps, formatPct } from "../lib/format";
 import { usePoll } from "../lib/poll";
@@ -21,15 +20,13 @@ export default function ResourcesPage() {
 
   return (
     <div className="stack">
-      <PageHeader kicker="主机" title="资源曲线" desc="按时间窗口查看 CPU、内存、磁盘和网络吞吐。">
-        <div className="range-tabs">
-          {ranges.map((r) => (
-            <button key={r.id} className={range === r.id ? "active" : ""} onClick={() => setRange(r.id)}>
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </PageHeader>
+      <div className="range-tabs">
+        {ranges.map((r) => (
+          <button key={r.id} className={range === r.id ? "active" : ""} onClick={() => setRange(r.id)}>
+            {r.label}
+          </button>
+        ))}
+      </div>
       {error ? <div className="error">{error}</div> : null}
       <article className="card panel">
         <div className="panel-head">

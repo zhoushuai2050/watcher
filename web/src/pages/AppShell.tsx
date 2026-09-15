@@ -1,12 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
 import BrandMark from "../components/BrandMark";
-import { IconBell, IconChart, IconGear, IconNet, IconOverview, IconProc, IconShield } from "../components/Icons";
+import { IconBell, IconChart, IconGear, IconNet, IconOverview, IconShield } from "../components/Icons";
 import { useAuth } from "../lib/auth";
 
 const links = [
   { to: "/", label: "总览", end: true, icon: <IconOverview /> },
   { to: "/resources", label: "资源", icon: <IconChart /> },
-  { to: "/processes", label: "进程", icon: <IconProc /> },
   { to: "/network", label: "网络", icon: <IconNet /> },
   { to: "/security", label: "安全", icon: <IconShield /> },
   { to: "/alerts", label: "告警", icon: <IconBell /> },

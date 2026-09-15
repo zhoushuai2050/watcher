@@ -41,6 +41,7 @@ else
   args+=(--sourcemap)
 fi
 "${args[@]}"
-cp "$ROOT/index.html" "$ROOT/dist/index.html"
 cp "$ROOT/favicon.svg" "$ROOT/dist/favicon.svg"
-echo "bundled web/dist/assets/main.js"
+ASSET_V="$(cat "$ROOT/dist/assets/main.js" "$ROOT/dist/assets/main.css" 2>/dev/null | md5sum | cut -c1-12)"
+sed "s/__ASSET_V__/${ASSET_V}/g" "$ROOT/index.html" > "$ROOT/dist/index.html"
+echo "bundled web/dist/assets/main.js v=${ASSET_V}"

@@ -47,6 +47,7 @@ export default function NetworkPage() {
               <thead>
                 <tr>
                   <th>端口</th>
+                  <th>协议</th>
                   <th>进程</th>
                   <th>地址</th>
                   <th>白名单</th>
@@ -54,9 +55,12 @@ export default function NetworkPage() {
               </thead>
               <tbody>
                 {(data?.listen || []).map((p) => (
-                  <tr key={`${p.proto}-${p.addr}-${p.port}`}>
+                  <tr key={`${p.proto}-${p.family}-${p.addr}-${p.port}`}>
                     <td className="mono">
                       {p.proto}:{p.port}
+                    </td>
+                    <td>
+                      {p.family === "ipv6" ? <span className="chip info">IPv6</span> : <span className="chip muted">IPv4</span>}
                     </td>
                     <td>
                       {p.name || "—"} <span className="muted">{p.pid || ""}</span>

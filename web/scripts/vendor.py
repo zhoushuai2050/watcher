@@ -20,6 +20,9 @@ PACKAGES = {
     "react-router-dom": "7.8.2",
     "cookie": "1.0.2",
     "set-cookie-parser": "2.7.1",
+    "echarts": "5.6.0",
+    "zrender": "5.6.1",
+    "tslib": "2.3.0",
 }
 ESBUILD_VERSION = "0.25.9"
 

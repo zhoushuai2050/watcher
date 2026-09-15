@@ -73,7 +73,7 @@ export default function OverviewPage() {
         <article className="card panel">
           <div className="panel-head">
             <div className="kicker">应用占用</div>
-            <Link to="/processes" className="muted">
+            <Link to="/resources?tab=process" className="muted">
               全部
             </Link>
           </div>

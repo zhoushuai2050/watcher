@@ -68,6 +68,7 @@ export type ProcGroup = {
 
 export type ListenPort = {
   proto: string;
+  family: string;
   addr: string;
   port: number;
   pid: number;

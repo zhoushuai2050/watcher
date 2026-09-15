@@ -416,6 +416,7 @@ func (s *Store) ProcessHistory(name, container string, from int64) ([]ProcRow, e
 
 type ListenPort struct {
 	Proto     string `json:"proto"`
+	Family    string `json:"family"`
 	Addr      string `json:"addr"`
 	Port      int    `json:"port"`
 	PID       int32  `json:"pid"`

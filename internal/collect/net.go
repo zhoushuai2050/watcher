@@ -61,7 +61,7 @@ func (e *Engine) collectNet() error {
 				pproto = "tcp"
 			}
 			listen = append(listen, store.ListenPort{
-				Proto: pproto, Addr: displayAddr(lip), Port: lport, PID: c.Pid, Name: name,
+				Proto: pproto, Family: ipFamily(c.Family, lip), Addr: displayAddr(lip), Port: lport, PID: c.Pid, Name: name,
 			})
 			continue
 		}
@@ -113,6 +113,15 @@ func (e *Engine) collectNet() error {
 	for _, r := range agg {
 		connsOut = append(connsOut, *r)
 	}
+	sort.Slice(listen, func(i, j int) bool {
+		if listen[i].Port != listen[j].Port {
+			return listen[i].Port < listen[j].Port
+		}
+		if listen[i].Proto != listen[j].Proto {
+			return listen[i].Proto < listen[j].Proto
+		}
+		return listen[i].Family < listen[j].Family
+	})
 	sort.Slice(connsOut, func(i, j int) bool { return connsOut[i].Count > connsOut[j].Count })
 	if len(connsOut) > 80 {
 		connsOut = connsOut[:80]
@@ -154,6 +163,13 @@ func connFamily(family, typ uint32) string {
 		return "udp"
 	}
 	return "tcp"
+}
+
+func ipFamily(family uint32, ip string) string {
+	if family == 10 || strings.Contains(ip, ":") {
+		return "ipv6"
+	}
+	return "ipv4"
 }
 
 func displayAddr(ip string) string {

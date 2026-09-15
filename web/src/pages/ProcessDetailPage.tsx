@@ -27,7 +27,7 @@ export default function ProcessDetailPage() {
         title={title}
         desc={latest ? `近 1 小时 · PID ${latest.pid} · CPU ${formatPct(latest.cpu, 1)} · ${formatBytes(latest.rss)}` : "近 1 小时采样"}
       >
-        <Link to="/processes" className="btn btn-ghost">
+        <Link to="/resources?tab=process" className="btn btn-ghost">
           返回列表
         </Link>
       </PageHeader>

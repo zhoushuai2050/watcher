@@ -1,14 +1,13 @@
 import type { ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { useAuth } from "./lib/auth";
 import AlertsPage from "./pages/AlertsPage";
 import AppShell from "./pages/AppShell";
 import LoginPage from "./pages/LoginPage";
 import NetworkPage from "./pages/NetworkPage";
 import OverviewPage from "./pages/OverviewPage";
+import HostPage from "./pages/HostPage";
 import ProcessDetailPage from "./pages/ProcessDetailPage";
-import ProcessesPage from "./pages/ProcessesPage";
-import ResourcesPage from "./pages/ResourcesPage";
 import SecurityPage from "./pages/SecurityPage";
 import SettingsPage from "./pages/SettingsPage";
 
@@ -17,6 +16,12 @@ function Guard({ children }: { children: ReactNode }) {
   if (loading) return <div className="auth-panel">加载中...</div>;
   if (!user) return <Navigate to="/login" replace />;
   return children;
+}
+
+function RedirectProcessView() {
+  const [params] = useSearchParams();
+  const q = params.toString();
+  return <Navigate to={q ? `/resources/view?${q}` : "/resources/view"} replace />;
 }
 
 function Guest({ children }: { children: ReactNode }) {
@@ -46,9 +51,10 @@ export default function App() {
         }
       >
         <Route index element={<OverviewPage />} />
-        <Route path="resources" element={<ResourcesPage />} />
-        <Route path="processes" element={<ProcessesPage />} />
-        <Route path="processes/view" element={<ProcessDetailPage />} />
+        <Route path="resources" element={<HostPage />} />
+        <Route path="resources/view" element={<ProcessDetailPage />} />
+        <Route path="processes" element={<Navigate to="/resources?tab=process" replace />} />
+        <Route path="processes/view" element={<RedirectProcessView />} />
         <Route path="network" element={<NetworkPage />} />
         <Route path="security" element={<SecurityPage />} />
         <Route path="alerts" element={<AlertsPage />} />

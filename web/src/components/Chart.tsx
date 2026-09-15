@@ -1,168 +1,236 @@
-import { useState } from "react";
+import { useEffect, useRef } from "react";
+import * as echarts from "echarts/core";
+import { LineChart } from "echarts/charts";
+import { AxisPointerComponent, DataZoomComponent, GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
+import type { EChartsCoreOption } from "echarts/core";
 
-type Series = { name: string; color: string; values: { t: number; v: number }[] };
-type Hit = { name: string; color: string; t: number; v: number; x: number; y: number };
+echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, AxisPointerComponent, CanvasRenderer]);
+
+type Point = { t: number; v: number };
+type Series = { name: string; color: string; values: Point[] };
+
+function hexAlpha(hex: string, a: number) {
+  const n = hex.replace("#", "");
+  const r = parseInt(n.slice(0, 2), 16);
+  const g = parseInt(n.slice(2, 4), 16);
+  const b = parseInt(n.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
 
 function fmtClock(t: number) {
-  const d = new Date(t * 1000);
+  const d = new Date(t);
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-function fmtAxis(t: number) {
-  const d = new Date(t * 1000);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+function fmtAxis(t: number, spanMs: number) {
+  const d = new Date(t);
+  const p = (n: number) => String(n).padStart(2, "0");
+  if (spanMs >= 2 * 86400000) return `${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
-
-const HIT_R = 14;
 
 export default function Chart({
   series,
-  height = 228,
+  height = 280,
   format = (n: number) => String(n),
+  variant = "full",
 }: {
   series: Series[];
   height?: number;
   format?: (n: number) => string;
+  variant?: "full" | "spark";
 }) {
-  const width = 760;
-  const pad = { top: 18, right: 18, bottom: 30, left: 56 };
-  const [hit, setHit] = useState<Hit | null>(null);
-
+  const elRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<echarts.ECharts | null>(null);
+  const formatRef = useRef(format);
+  formatRef.current = format;
   const points = series.flatMap((s) => s.values);
-  if (points.length === 0) {
-    return <div className="empty">还没有足够的采样，等采集跑一会儿。</div>;
-  }
+  const empty = points.length === 0;
 
-  const times = points.map((p) => p.t);
-  const minT = Math.min(...times);
-  const maxT = Math.max(...times);
-  const rawMax = Math.max(...points.map((p) => p.v), 1);
-  const minV = 0;
-  const maxV = rawMax * 1.08;
-  const innerW = width - pad.left - pad.right;
-  const innerH = height - pad.top - pad.bottom;
-  const x = (t: number) => pad.left + (maxT === minT ? innerW / 2 : ((t - minT) / (maxT - minT)) * innerW);
-  const y = (v: number) => pad.top + ((maxV - v) / (maxV - minV || 1)) * innerH;
-  const ticks = [minV, maxV / 2, maxV];
-  const xTicks = [minT, Math.round((minT + maxT) / 2), maxT];
-  const gid = series.map((s) => s.name.replace(/\W+/g, "")).join("-") || "g";
+  useEffect(() => {
+    const el = elRef.current;
+    if (!el || empty) return;
+    const chart = echarts.getInstanceByDom(el) || echarts.init(el, undefined, { renderer: "canvas" });
+    chartRef.current = chart;
+    const ro = new ResizeObserver(() => chart.resize());
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      chart.dispose();
+      chartRef.current = null;
+    };
+  }, [empty]);
 
-  function pathOf(values: { t: number; v: number }[]) {
-    return values.map((p, i) => `${i === 0 ? "M" : "L"} ${x(p.t).toFixed(1)} ${y(p.v).toFixed(1)}`).join(" ");
-  }
-  function areaOf(values: { t: number; v: number }[]) {
-    if (!values.length) return "";
-    const base = pad.top + innerH;
-    return `${pathOf(values)} L ${x(values[values.length - 1].t).toFixed(1)} ${base} L ${x(values[0].t).toFixed(1)} ${base} Z`;
-  }
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || empty) return;
+    const times = points.map((p) => p.t);
+    const minT = Math.min(...times);
+    const maxT = Math.max(...times);
+    const spanMs = variant === "spark" ? 0 : (maxT - minT) * 1000;
+    const fmt = (n: number) => formatRef.current(n);
 
-  function hitFromClient(svg: SVGSVGElement, clientX: number, clientY: number): Hit | null {
-    const rect = svg.getBoundingClientRect();
-    const px = ((clientX - rect.left) / rect.width) * width;
-    const py = ((clientY - rect.top) / rect.height) * height;
-    let best: Hit | null = null;
-    let dist = HIT_R;
-    for (const s of series) {
-      for (const p of s.values) {
-        const hx = x(p.t);
-        const hy = y(p.v);
-        const d = Math.hypot(hx - px, hy - py);
-        if (d <= dist) {
-          dist = d;
-          best = { name: s.name, color: s.color, t: p.t, v: p.v, x: hx, y: hy };
-        }
-      }
-    }
-    return best;
-  }
+    const option: EChartsCoreOption =
+      variant === "spark"
+        ? {
+            animation: false,
+            grid: { left: 0, right: 0, top: 4, bottom: 0 },
+            xAxis: { type: "category", show: false, data: series[0]?.values.map((_, i) => i) || [] },
+            yAxis: { type: "value", show: false, min: "dataMin", max: "dataMax" },
+            tooltip: { show: false },
+            series: series.map((s) => ({
+              type: "line",
+              data: s.values.map((p) => p.v),
+              showSymbol: false,
+              smooth: 0.2,
+              lineStyle: { width: 1.4, color: s.color },
+              areaStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: hexAlpha(s.color, 0.28) },
+                  { offset: 1, color: hexAlpha(s.color, 0) },
+                ]),
+              },
+            })),
+          }
+        : {
+            animationDuration: 400,
+            animationDurationUpdate: 280,
+            color: series.map((s) => s.color),
+            grid: { left: 16, right: 18, top: 28, bottom: 52, containLabel: true },
+            legend: {
+              bottom: 0,
+              left: 8,
+              itemWidth: 10,
+              itemHeight: 8,
+              itemGap: 16,
+              textStyle: { color: "#8393a4", fontSize: 12 },
+              icon: "roundRect",
+            },
+            tooltip: {
+              trigger: "axis",
+              backgroundColor: "rgba(12, 18, 24, 0.94)",
+              borderColor: "rgba(148, 175, 196, 0.16)",
+              borderWidth: 1,
+              padding: [10, 12],
+              textStyle: { color: "#e8eef4", fontSize: 12 },
+              axisPointer: {
+                type: "cross",
+                lineStyle: { color: "rgba(62, 224, 178, 0.45)", width: 1 },
+                crossStyle: { color: "rgba(62, 224, 178, 0.35)" },
+                label: { backgroundColor: "#161f28", color: "#e8eef4", borderRadius: 4 },
+              },
+              formatter: (raw) => {
+                const items = Array.isArray(raw) ? raw : [raw];
+                if (!items.length) return "";
+                const t = Number(items[0].value?.[0]);
+                const rows = items
+                  .map((it) => {
+                    const v = Number(it.value?.[1]);
+                    return `<div style="display:flex;justify-content:space-between;gap:20px;margin-top:4px">
+                      <span><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:${it.color};margin-right:6px"></span>${it.seriesName}</span>
+                      <b style="font-family:IBM Plex Mono,ui-monospace,monospace;font-weight:500">${fmt(v)}</b>
+                    </div>`;
+                  })
+                  .join("");
+                return `<div style="color:#8393a4;font-size:11px;margin-bottom:4px">${fmtClock(t)}</div>${rows}`;
+              },
+            },
+            dataZoom: [
+              { type: "inside", xAxisIndex: 0, filterMode: "none", zoomOnMouseWheel: true, moveOnMouseMove: true },
+              {
+                type: "slider",
+                height: 16,
+                bottom: 28,
+                borderColor: "transparent",
+                backgroundColor: "rgba(255,255,255,0.04)",
+                fillerColor: "rgba(62, 224, 178, 0.14)",
+                handleSize: 12,
+                handleStyle: { color: "#3ee0b2", borderColor: "#3ee0b2" },
+                moveHandleSize: 0,
+                textStyle: { color: "#8393a4", fontSize: 10 },
+                dataBackground: {
+                  lineStyle: { color: "rgba(62, 224, 178, 0.35)" },
+                  areaStyle: { color: "rgba(62, 224, 178, 0.08)" },
+                },
+                selectedDataBackground: {
+                  lineStyle: { color: "#3ee0b2" },
+                  areaStyle: { color: "rgba(62, 224, 178, 0.18)" },
+                },
+              },
+            ],
+            xAxis: {
+              type: "time",
+              boundaryGap: false,
+              axisLine: { lineStyle: { color: "rgba(148, 175, 196, 0.18)" } },
+              axisTick: { show: false },
+              axisLabel: {
+                color: "#7d8c9c",
+                fontSize: 11,
+                hideOverlap: true,
+                formatter: (value: number) => fmtAxis(value, spanMs),
+              },
+              splitLine: { show: false },
+            },
+            yAxis: {
+              type: "value",
+              min: 0,
+              axisLine: { show: false },
+              axisTick: { show: false },
+              axisLabel: {
+                color: "#7d8c9c",
+                fontSize: 11,
+                formatter: (value: number) => fmt(value),
+              },
+              splitLine: { lineStyle: { color: "rgba(140, 170, 190, 0.1)" } },
+            },
+            series: series.map((s) => ({
+              name: s.name,
+              type: "line",
+              showSymbol: false,
+              symbol: "circle",
+              symbolSize: 8,
+              smooth: 0.18,
+              sampling: "lttb",
+              emphasis: { focus: "series", itemStyle: { borderWidth: 2, borderColor: "#0b1014" } },
+              lineStyle: { width: 2, color: s.color },
+              itemStyle: { color: s.color },
+              areaStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: hexAlpha(s.color, 0.28) },
+                  { offset: 1, color: hexAlpha(s.color, 0.02) },
+                ]),
+              },
+              data: s.values.map((p) => [p.t * 1000, p.v]),
+            })),
+          };
+    chart.setOption(option, true);
+  }, [series, empty, variant, points]);
 
-  const tipLeftPct = hit ? (hit.x / width) * 100 : 0;
-  const tipTopPct = hit ? (hit.y / height) * 100 : 0;
+  if (empty) {
+    return variant === "spark" ? <div className="spark" /> : <div className="empty">还没有足够的采样，等采集跑一会儿。</div>;
+  }
 
   return (
-    <div className={`chart-wrap ${hit ? "is-hot" : ""}`}>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        onMouseMove={(e) => setHit(hitFromClient(e.currentTarget, e.clientX, e.clientY))}
-        onMouseLeave={() => setHit(null)}
-        onTouchStart={(e) => setHit(hitFromClient(e.currentTarget, e.touches[0].clientX, e.touches[0].clientY))}
-        onTouchMove={(e) => setHit(hitFromClient(e.currentTarget, e.touches[0].clientX, e.touches[0].clientY))}
-      >
-        <defs>
-          {series.map((s, i) => (
-            <linearGradient key={s.name} id={`${gid}-${i}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={s.color} stopOpacity="0.22" />
-              <stop offset="100%" stopColor={s.color} stopOpacity="0" />
-            </linearGradient>
-          ))}
-        </defs>
-        {ticks.map((tick) => (
-          <g key={tick}>
-            <line x1={pad.left} x2={width - pad.right} y1={y(tick)} y2={y(tick)} stroke="rgba(140,170,190,0.1)" />
-            <text x={8} y={y(tick) + 4} fontSize="11" fill="#7d8c9c">
-              {format(tick)}
-            </text>
-          </g>
-        ))}
-        {series.map((s, i) => (
-          <g key={s.name}>
-            <path d={areaOf(s.values)} fill={`url(#${gid}-${i})`} />
-            <path d={pathOf(s.values)} fill="none" stroke={s.color} strokeWidth="1.15" strokeLinejoin="round" strokeLinecap="round" />
-          </g>
-        ))}
-        {hit ? <circle cx={hit.x} cy={hit.y} r="3.4" fill={hit.color} stroke="#0b1014" strokeWidth="1.2" /> : null}
-        {xTicks.map((t) => (
-          <text key={t} x={x(t)} y={height - 8} textAnchor="middle" fontSize="11" fill="#7d8c9c">
-            {fmtAxis(t)}
-          </text>
-        ))}
-      </svg>
-      {hit ? (
-        <div
-          className={`chart-tip ${tipLeftPct > 62 ? "is-left" : ""}`}
-          style={{ left: `${tipLeftPct}%`, top: `${tipTopPct}%` }}
-        >
-          <time>{fmtClock(hit.t)}</time>
-          <div className="chart-tip-row">
-            <span>
-              <i style={{ background: hit.color }} />
-              {hit.name}
-            </span>
-            <b>{format(hit.v)}</b>
-          </div>
-        </div>
-      ) : null}
-      <div className="legend">
-        {series.map((s) => (
-          <span key={s.name}>
-            <i style={{ background: s.color }} />
-            {s.name}
-          </span>
-        ))}
-      </div>
+    <div className={variant === "spark" ? "spark-chart" : "chart-wrap"} style={variant === "full" ? { height } : undefined}>
+      <div ref={elRef} className="chart-el" />
     </div>
   );
 }
 
 export function Sparkline({ values, color = "#3ee0b2" }: { values: number[]; color?: string }) {
-  if (!values.length) return <div className="spark" />;
-  const w = 160;
-  const h = 42;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const pts = values.map((v, i) => {
-    const x = values.length === 1 ? w / 2 : (i / (values.length - 1)) * w;
-    const y = max === min ? h / 2 : h - ((v - min) / (max - min)) * (h - 6) - 3;
-    return { x, y };
-  });
-  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-  const area = `${line} L ${pts[pts.length - 1].x.toFixed(1)} ${h} L ${pts[0].x.toFixed(1)} ${h} Z`;
   return (
-    <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-      <path d={area} fill={color} opacity="0.16" />
-      <path d={line} fill="none" stroke={color} strokeWidth="1.15" strokeLinejoin="round" />
-    </svg>
+    <Chart
+      variant="spark"
+      height={42}
+      series={[
+        {
+          name: "",
+          color,
+          values: values.map((v, i) => ({ t: i, v })),
+        },
+      ]}
+    />
   );
 }

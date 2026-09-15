@@ -489,8 +489,10 @@ func (s *Server) ui(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "image/svg+xml")
 			case ".js":
 				w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			case ".css":
 				w.Header().Set("Content-Type", "text/css; charset=utf-8")
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			case ".ico":
 				w.Header().Set("Content-Type", "image/x-icon")
 			}
@@ -510,5 +512,7 @@ func (s *Server) ui(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
 	_, _ = w.Write(b)
 }

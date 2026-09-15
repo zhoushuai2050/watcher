@@ -13,6 +13,12 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/Watcher/assets/main.css?v=__ASSET_V__" />
+    <script>
+      try {
+        var t = localStorage.getItem("watcher.theme");
+        document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

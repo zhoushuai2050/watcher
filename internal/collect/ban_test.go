@@ -46,6 +46,19 @@ func TestBanPermanentAndUnban(t *testing.T) {
 	if ok {
 		t.Fatal("still banned")
 	}
+	if err := eng.AddAllow("203.0.113.80", "office"); err != nil {
+		t.Fatal(err)
+	}
+	if err := eng.BanPermanent("203.0.113.80", "nope", false); err == nil {
+		t.Fatal("whitelist should block manual ban")
+	}
+	if err := eng.BanPermanent("203.0.113.80", "nope", true); err != nil {
+		t.Fatal(err)
+	}
+	banned, _ := st.IsBanned("203.0.113.80")
+	if banned {
+		t.Fatal("auto should skip whitelist")
+	}
 	joined := strings.Join(calls, "\n")
 	if !strings.Contains(joined, "add element inet watcher permanent4") {
 		t.Fatalf("calls=%v", calls)

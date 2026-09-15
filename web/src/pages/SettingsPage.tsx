@@ -86,7 +86,7 @@ export default function SettingsPage() {
 
   return (
     <div className="stack">
-      <PageHeader kicker="本机" title="设置" desc="采集器读不到日志时会在这里标红，而不是静默空白。" />
+      <PageHeader kicker="配置" title="设置" desc="采集异常会标红。可改告警阈值和登录密码。" />
       {error ? <div className="error">{error}</div> : null}
       {saved ? <div className="ok">{saved}</div> : null}
       {data.default_password ? <div className="error">仍在使用默认密码 watcher，请尽快改掉。</div> : null}

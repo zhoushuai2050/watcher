@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -135,6 +136,11 @@ CREATE TABLE IF NOT EXISTS ip_bans (
   reason TEXT,
   hits INTEGER NOT NULL DEFAULT 0,
   auto INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS ip_allowlist (
+  spec TEXT PRIMARY KEY,
+  note TEXT,
+  created_at INTEGER NOT NULL
 );
 `)
 	return err
@@ -503,42 +509,54 @@ func (s *Store) QueryEvents(source, ip string, from int64, limit int) ([]Event, 
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	q := `SELECT id,ts,source,type,severity,src_ip,user_name,path,message FROM security_events WHERE ts>=?`
+	items, _, err := s.QueryEventsPage(source, ip, "", from, 1, limit)
+	return items, err
+}
+
+func (s *Store) QueryEventsPage(source, ip, q string, from int64, page, size int) ([]Event, int, error) {
+	page, size = NormalizePage(page, size)
+	where := `ts>=?`
 	args := []any{from}
 	if source != "" {
-		q += ` AND source=?`
+		where += ` AND source=?`
 		args = append(args, source)
 	}
 	if ip != "" {
-		q += ` AND src_ip=?`
+		where += ` AND src_ip=?`
 		args = append(args, ip)
 	}
-	q += ` ORDER BY ts DESC, id DESC LIMIT ?`
-	args = append(args, limit)
-	rows, err := s.db.Query(q, args...)
+	where, args = appendFuzzy(where, args, q, "src_ip", "IFNULL(user_name,'')", "IFNULL(path,'')", "message", "type", "source")
+	var total int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM security_events WHERE `+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := `SELECT id,ts,source,type,severity,src_ip,user_name,path,message FROM security_events WHERE ` + where + ` ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?`
+	qargs := append(append([]any{}, args...), size, (page-1)*size)
+	rows, err := s.db.Query(query, qargs...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	out := []Event{}
 	for rows.Next() {
 		var e Event
 		if err := rows.Scan(&e.ID, &e.Ts, &e.Source, &e.Type, &e.Severity, &e.SrcIP, &e.User, &e.Path, &e.Message); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		out = append(out, e)
 	}
-	return out, rows.Err()
+	return out, total, rows.Err()
 }
 
 type IPAgg struct {
-	SrcIP     string `json:"src_ip"`
-	Events    int    `json:"events"`
-	Fails     int    `json:"fails"`
-	LastSeen  int64  `json:"last_seen"`
-	Sources   string `json:"sources"`
-	Banned    bool   `json:"banned"`
-	BanReason string `json:"ban_reason,omitempty"`
+	SrcIP       string `json:"src_ip"`
+	Events      int    `json:"events"`
+	Fails       int    `json:"fails"`
+	LastSeen    int64  `json:"last_seen"`
+	Sources     string `json:"sources"`
+	Banned      bool   `json:"banned"`
+	BanReason   string `json:"ban_reason,omitempty"`
+	Whitelisted bool   `json:"whitelisted"`
 }
 
 var AttackFailTypes = []string{"ssh_failed", "ssh_invalid", "web_probe", "web_failed", "fail2ban_ban", "port_scan"}
@@ -565,21 +583,36 @@ func IsAttackFail(typ string) bool {
 }
 
 func (s *Store) QueryIPAgg(from int64) ([]IPAgg, error) {
-	args := attackFailArgs()
-	args = append(args, from)
-	rows, err := s.db.Query(`SELECT e.src_ip,
+	items, _, err := s.QueryIPAggPage(from, "", 1, 200)
+	return items, err
+}
+
+func (s *Store) QueryIPAggPage(from int64, q string, page, size int) ([]IPAgg, int, error) {
+	page, size = NormalizePage(page, size)
+	where := `e.ts>=? AND e.src_ip IS NOT NULL AND e.src_ip!=''`
+	whereArgs := []any{from}
+	where, whereArgs = appendFuzzy(where, whereArgs, q, "e.src_ip", "IFNULL(b.reason,'')", "e.source", "e.message")
+	grouped := `FROM security_events e
+		LEFT JOIN ip_bans b ON b.ip=e.src_ip
+		WHERE ` + where + `
+		GROUP BY e.src_ip`
+	var total int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM (SELECT e.src_ip `+grouped+`)`, whereArgs...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := `SELECT e.src_ip,
 		COUNT(*) as events,
-		SUM(CASE WHEN e.type IN (`+attackFailPlaceholders()+`) THEN 1 ELSE 0 END) as fails,
+		SUM(CASE WHEN e.type IN (` + attackFailPlaceholders() + `) THEN 1 ELSE 0 END) as fails,
 		MAX(e.ts) as last_seen,
 		GROUP_CONCAT(DISTINCT e.source),
 		CASE WHEN b.ip IS NULL THEN 0 ELSE 1 END as banned,
 		COALESCE(b.reason,'')
-		FROM security_events e
-		LEFT JOIN ip_bans b ON b.ip=e.src_ip
-		WHERE e.ts>=? AND e.src_ip IS NOT NULL AND e.src_ip!=''
-		GROUP BY e.src_ip ORDER BY last_seen DESC LIMIT 200`, args...)
+		` + grouped + ` ORDER BY last_seen DESC LIMIT ? OFFSET ?`
+	qargs := append(append([]any{}, attackFailArgs()...), whereArgs...)
+	qargs = append(qargs, size, (page-1)*size)
+	rows, err := s.db.Query(query, qargs...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	out := []IPAgg{}
@@ -587,12 +620,12 @@ func (s *Store) QueryIPAgg(from int64) ([]IPAgg, error) {
 		var r IPAgg
 		var banned int
 		if err := rows.Scan(&r.SrcIP, &r.Events, &r.Fails, &r.LastSeen, &r.Sources, &banned, &r.BanReason); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		r.Banned = banned != 0
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	return out, total, rows.Err()
 }
 
 func (s *Store) CountAttackFails(from int64) ([]CountRow, error) {
@@ -676,6 +709,34 @@ func (s *Store) ListBans() ([]IPBan, error) {
 	return out, rows.Err()
 }
 
+func (s *Store) ListBansPage(q string, page, size int) ([]IPBan, int, error) {
+	page, size = NormalizePage(page, size)
+	where := `1=1`
+	args := []any{}
+	where, args = appendFuzzy(where, args, q, "ip", "IFNULL(reason,'')")
+	var total int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM ip_bans WHERE `+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	qargs := append(append([]any{}, args...), size, (page-1)*size)
+	rows, err := s.db.Query(`SELECT ip,created_at,COALESCE(reason,''),hits,auto FROM ip_bans WHERE `+where+` ORDER BY created_at DESC LIMIT ? OFFSET ?`, qargs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	out := []IPBan{}
+	for rows.Next() {
+		var b IPBan
+		var auto int
+		if err := rows.Scan(&b.IP, &b.CreatedAt, &b.Reason, &b.Hits, &auto); err != nil {
+			return nil, 0, err
+		}
+		b.Auto = auto != 0
+		out = append(out, b)
+	}
+	return out, total, rows.Err()
+}
+
 func (s *Store) DeleteBan(ip string) error {
 	_, err := s.db.Exec(`DELETE FROM ip_bans WHERE ip=?`, ip)
 	return err
@@ -685,6 +746,121 @@ func (s *Store) CountBans() (int, error) {
 	var n int
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM ip_bans`).Scan(&n)
 	return n, err
+}
+
+type IPAllow struct {
+	Spec      string `json:"spec"`
+	Note      string `json:"note"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+func NormalizeAllow(spec string) (string, bool) {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return "", false
+	}
+	if strings.Contains(spec, "/") {
+		_, n, err := net.ParseCIDR(spec)
+		if err != nil {
+			return "", false
+		}
+		return n.String(), true
+	}
+	ip := net.ParseIP(spec)
+	if ip == nil {
+		return "", false
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String(), true
+	}
+	return ip.String(), true
+}
+
+func AllowContains(spec, ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	if strings.Contains(spec, "/") {
+		_, n, err := net.ParseCIDR(spec)
+		return err == nil && n.Contains(parsed)
+	}
+	other := net.ParseIP(spec)
+	return other != nil && other.Equal(parsed)
+}
+
+func MatchAllow(list []IPAllow, ip string) bool {
+	for _, a := range list {
+		if AllowContains(a.Spec, ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) InsertAllow(a IPAllow) error {
+	if a.CreatedAt == 0 {
+		a.CreatedAt = time.Now().Unix()
+	}
+	_, err := s.db.Exec(`INSERT INTO ip_allowlist(spec,note,created_at) VALUES(?,?,?)
+		ON CONFLICT(spec) DO UPDATE SET note=excluded.note`, a.Spec, a.Note, a.CreatedAt)
+	return err
+}
+
+func (s *Store) ListAllow() ([]IPAllow, error) {
+	rows, err := s.db.Query(`SELECT spec,COALESCE(note,''),created_at FROM ip_allowlist ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []IPAllow{}
+	for rows.Next() {
+		var a IPAllow
+		if err := rows.Scan(&a.Spec, &a.Note, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) ListAllowPage(q string, page, size int) ([]IPAllow, int, error) {
+	page, size = NormalizePage(page, size)
+	where := `1=1`
+	args := []any{}
+	where, args = appendFuzzy(where, args, q, "spec", "IFNULL(note,'')")
+	var total int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM ip_allowlist WHERE `+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	qargs := append(append([]any{}, args...), size, (page-1)*size)
+	rows, err := s.db.Query(`SELECT spec,COALESCE(note,''),created_at FROM ip_allowlist WHERE `+where+` ORDER BY created_at DESC LIMIT ? OFFSET ?`, qargs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	out := []IPAllow{}
+	for rows.Next() {
+		var a IPAllow
+		if err := rows.Scan(&a.Spec, &a.Note, &a.CreatedAt); err != nil {
+			return nil, 0, err
+		}
+		out = append(out, a)
+	}
+	return out, total, rows.Err()
+}
+
+func (s *Store) DeleteAllow(spec string) error {
+	_, err := s.db.Exec(`DELETE FROM ip_allowlist WHERE spec=?`, spec)
+	return err
+}
+
+func (s *Store) IsAllowed(ip string) (bool, error) {
+	list, err := s.ListAllow()
+	if err != nil {
+		return false, err
+	}
+	return MatchAllow(list, ip), nil
 }
 
 type CountRow struct {
@@ -775,22 +951,33 @@ func (s *Store) ListAlerts(status string, limit int) ([]Alert, error) {
 	if limit <= 0 {
 		limit = 100
 	}
-	q := `SELECT id,rule_id,key,severity,status,first_seen,last_seen,count,summary FROM alerts`
+	items, _, err := s.ListAlertsPage(status, "", 1, limit)
+	return items, err
+}
+
+func (s *Store) ListAlertsPage(status, q string, page, size int) ([]Alert, int, error) {
+	page, size = NormalizePage(page, size)
+	where := `1=1`
 	args := []any{}
 	if status == "active" {
-		q += ` WHERE status IN ('open','acked')`
+		where += ` AND status IN ('open','acked')`
 	} else if status != "" {
-		q += ` WHERE status=?`
+		where += ` AND status=?`
 		args = append(args, status)
 	}
-	q += ` ORDER BY last_seen DESC LIMIT ?`
-	args = append(args, limit)
-	rows, err := s.db.Query(q, args...)
+	where, args = appendFuzzy(where, args, q, "rule_id", "key", "summary", "severity")
+	var total int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM alerts WHERE `+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	qargs := append(append([]any{}, args...), size, (page-1)*size)
+	rows, err := s.db.Query(`SELECT id,rule_id,key,severity,status,first_seen,last_seen,count,summary FROM alerts WHERE `+where+` ORDER BY last_seen DESC LIMIT ? OFFSET ?`, qargs...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
-	return scanAlerts(rows)
+	items, err := scanAlerts(rows)
+	return items, total, err
 }
 
 func scanAlerts(rows *sql.Rows) ([]Alert, error) {

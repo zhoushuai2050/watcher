@@ -4,6 +4,7 @@ import { LineChart } from "echarts/charts";
 import { AxisPointerComponent, DataZoomComponent, GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { EChartsCoreOption } from "echarts/core";
+import { useTheme } from "../lib/theme";
 
 echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, AxisPointerComponent, CanvasRenderer]);
 
@@ -46,6 +47,7 @@ export default function Chart({
   const chartRef = useRef<echarts.ECharts | null>(null);
   const formatRef = useRef(format);
   formatRef.current = format;
+  const { theme } = useTheme();
   const points = series.flatMap((s) => s.values);
   const empty = points.length === 0;
 
@@ -71,6 +73,14 @@ export default function Chart({
     const maxT = Math.max(...times);
     const spanMs = variant === "spark" ? 0 : (maxT - minT) * 1000;
     const fmt = (n: number) => formatRef.current(n);
+    const css = getComputedStyle(document.documentElement);
+    const ink = css.getPropertyValue("--ink").trim() || "#e8eef4";
+    const muted = css.getPropertyValue("--muted").trim() || "#8393a4";
+    const surface = css.getPropertyValue("--surface").trim() || "#121a22";
+    const surface2 = css.getPropertyValue("--surface-2").trim() || "#161f28";
+    const accent = css.getPropertyValue("--accent").trim() || "#3ee0b2";
+    const line = css.getPropertyValue("--line").trim() || "rgba(148,175,196,0.12)";
+    const accentDim = css.getPropertyValue("--accent-dim").trim() || "rgba(62,224,178,0.14)";
 
     const option: EChartsCoreOption =
       variant === "spark"
@@ -105,21 +115,21 @@ export default function Chart({
               itemWidth: 10,
               itemHeight: 8,
               itemGap: 16,
-              textStyle: { color: "#8393a4", fontSize: 12 },
+              textStyle: { color: muted, fontSize: 12 },
               icon: "roundRect",
             },
             tooltip: {
               trigger: "axis",
-              backgroundColor: "rgba(12, 18, 24, 0.94)",
-              borderColor: "rgba(148, 175, 196, 0.16)",
+              backgroundColor: surface,
+              borderColor: line,
               borderWidth: 1,
               padding: [10, 12],
-              textStyle: { color: "#e8eef4", fontSize: 12 },
+              textStyle: { color: ink, fontSize: 12 },
               axisPointer: {
                 type: "cross",
-                lineStyle: { color: "rgba(62, 224, 178, 0.45)", width: 1 },
-                crossStyle: { color: "rgba(62, 224, 178, 0.35)" },
-                label: { backgroundColor: "#161f28", color: "#e8eef4", borderRadius: 4 },
+                lineStyle: { color: accent, width: 1, opacity: 0.5 },
+                crossStyle: { color: accent, opacity: 0.4 },
+                label: { backgroundColor: surface2, color: ink, borderRadius: 4 },
               },
               formatter: (raw) => {
                 const items = Array.isArray(raw) ? raw : [raw];
@@ -134,7 +144,7 @@ export default function Chart({
                     </div>`;
                   })
                   .join("");
-                return `<div style="color:#8393a4;font-size:11px;margin-bottom:4px">${fmtClock(t)}</div>${rows}`;
+                return `<div style="color:${muted};font-size:11px;margin-bottom:4px">${fmtClock(t)}</div>${rows}`;
               },
             },
             dataZoom: [
@@ -144,29 +154,29 @@ export default function Chart({
                 height: 16,
                 bottom: 28,
                 borderColor: "transparent",
-                backgroundColor: "rgba(255,255,255,0.04)",
-                fillerColor: "rgba(62, 224, 178, 0.14)",
+                backgroundColor: accentDim,
+                fillerColor: accentDim,
                 handleSize: 12,
-                handleStyle: { color: "#3ee0b2", borderColor: "#3ee0b2" },
+                handleStyle: { color: accent, borderColor: accent },
                 moveHandleSize: 0,
-                textStyle: { color: "#8393a4", fontSize: 10 },
+                textStyle: { color: muted, fontSize: 10 },
                 dataBackground: {
-                  lineStyle: { color: "rgba(62, 224, 178, 0.35)" },
-                  areaStyle: { color: "rgba(62, 224, 178, 0.08)" },
+                  lineStyle: { color: accent, opacity: 0.4 },
+                  areaStyle: { color: accentDim },
                 },
                 selectedDataBackground: {
-                  lineStyle: { color: "#3ee0b2" },
-                  areaStyle: { color: "rgba(62, 224, 178, 0.18)" },
+                  lineStyle: { color: accent },
+                  areaStyle: { color: accentDim },
                 },
               },
             ],
             xAxis: {
               type: "time",
               boundaryGap: false,
-              axisLine: { lineStyle: { color: "rgba(148, 175, 196, 0.18)" } },
+              axisLine: { lineStyle: { color: line } },
               axisTick: { show: false },
               axisLabel: {
-                color: "#7d8c9c",
+                color: muted,
                 fontSize: 11,
                 hideOverlap: true,
                 formatter: (value: number) => fmtAxis(value, spanMs),
@@ -179,11 +189,11 @@ export default function Chart({
               axisLine: { show: false },
               axisTick: { show: false },
               axisLabel: {
-                color: "#7d8c9c",
+                color: muted,
                 fontSize: 11,
                 formatter: (value: number) => fmt(value),
               },
-              splitLine: { lineStyle: { color: "rgba(140, 170, 190, 0.1)" } },
+              splitLine: { lineStyle: { color: line } },
             },
             series: series.map((s) => ({
               name: s.name,
@@ -193,7 +203,7 @@ export default function Chart({
               symbolSize: 8,
               smooth: 0.18,
               sampling: "lttb",
-              emphasis: { focus: "series", itemStyle: { borderWidth: 2, borderColor: "#0b1014" } },
+              emphasis: { focus: "series", itemStyle: { borderWidth: 2, borderColor: surface } },
               lineStyle: { width: 2, color: s.color },
               itemStyle: { color: s.color },
               areaStyle: {
@@ -206,7 +216,7 @@ export default function Chart({
             })),
           };
     chart.setOption(option, true);
-  }, [series, empty, variant, points]);
+  }, [series, empty, variant, points, theme]);
 
   if (empty) {
     return variant === "spark" ? <div className="spark" /> : <div className="empty">还没有足够的采样，等采集跑一会儿。</div>;

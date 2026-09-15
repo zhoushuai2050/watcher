@@ -1,5 +1,12 @@
 export type User = { id: string | number; name: string };
 
+export type Page<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
 export type DiskInfo = {
   mount: string;
   fstype: string;
@@ -85,6 +92,23 @@ export type ConnRow = {
   count: number;
 };
 
+export type IPLookup = {
+  ip: string;
+  family: string;
+  private: boolean;
+  country: string;
+  region: string;
+  city: string;
+  isp: string;
+  org: string;
+  asn: string;
+  timezone: string;
+  lat: number;
+  lon: number;
+  location: string;
+  source: string;
+};
+
 export type NetSnapshot = {
   ts: number;
   listen: ListenPort[];
@@ -112,6 +136,13 @@ export type IPAgg = {
   sources: string;
   banned: boolean;
   ban_reason?: string;
+  whitelisted: boolean;
+};
+
+export type IPAllow = {
+  spec: string;
+  note: string;
+  created_at: number;
 };
 
 export type IPBan = {
@@ -175,5 +206,4 @@ export type Settings = {
   nginx_log: string;
   fail2ban_log: string;
   attack_ban_threshold: number;
-  ban_ignore: string[];
 };

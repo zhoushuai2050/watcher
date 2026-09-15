@@ -16,6 +16,7 @@ import (
 	"watcher/internal/collect"
 	"watcher/internal/config"
 	"watcher/internal/detect"
+	"watcher/internal/geo"
 	"watcher/internal/store"
 	"watcher/web"
 )
@@ -48,11 +49,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/processes", s.authed(s.processes))
 	mux.HandleFunc("GET /api/v1/processes/history", s.authed(s.processHistory))
 	mux.HandleFunc("GET /api/v1/network", s.authed(s.network))
+	mux.HandleFunc("GET /api/v1/network/ip", s.authed(s.lookupIP))
 	mux.HandleFunc("GET /api/v1/security/events", s.authed(s.events))
 	mux.HandleFunc("GET /api/v1/security/ips", s.authed(s.ips))
 	mux.HandleFunc("GET /api/v1/security/bans", s.authed(s.bans))
 	mux.HandleFunc("POST /api/v1/security/bans", s.authed(s.postBan))
 	mux.HandleFunc("POST /api/v1/security/unban", s.authed(s.postUnban))
+	mux.HandleFunc("GET /api/v1/security/allow", s.authed(s.listAllow))
+	mux.HandleFunc("POST /api/v1/security/allow", s.authed(s.postAllow))
+	mux.HandleFunc("POST /api/v1/security/allow/delete", s.authed(s.deleteAllow))
 	mux.HandleFunc("GET /api/v1/alerts", s.authed(s.alerts))
 	mux.HandleFunc("POST /api/v1/alerts/ack", s.authed(s.ackAlerts))
 	mux.HandleFunc("POST /api/v1/alerts/resolve", s.authed(s.resolveAlerts))
@@ -283,6 +288,26 @@ func (s *Server) network(w http.ResponseWriter, _ *http.Request) {
 	ok(w, net)
 }
 
+func (s *Server) lookupIP(w http.ResponseWriter, r *http.Request) {
+	ip := strings.TrimSpace(r.URL.Query().Get("ip"))
+	info, err := geo.Lookup(ip)
+	if err != nil {
+		fail(w, 400, err.Error())
+		return
+	}
+	ok(w, info)
+}
+
+func parsePage(r *http.Request) (page, size int) {
+	page, _ = strconv.Atoi(r.URL.Query().Get("page"))
+	size, _ = strconv.Atoi(r.URL.Query().Get("page_size"))
+	return store.NormalizePage(page, size)
+}
+
+func pageOK(w http.ResponseWriter, items any, total, page, size int) {
+	ok(w, map[string]any{"items": items, "total": total, "page": page, "page_size": size})
+}
+
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	from := time.Now().Unix() - 7*86400
@@ -291,31 +316,46 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			from = n
 		}
 	}
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	rows, err := s.store.QueryEvents(q.Get("source"), q.Get("ip"), from, limit)
+	page, size := parsePage(r)
+	if v := q.Get("limit"); v != "" && q.Get("page_size") == "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			_, size = store.NormalizePage(1, n)
+		}
+	}
+	rows, total, err := s.store.QueryEventsPage(q.Get("source"), q.Get("ip"), q.Get("q"), from, page, size)
 	if err != nil {
 		fail(w, 500, err.Error())
 		return
 	}
-	ok(w, rows)
+	pageOK(w, rows, total, page, size)
 }
 
-func (s *Server) ips(w http.ResponseWriter, _ *http.Request) {
-	rows, err := s.store.QueryIPAgg(time.Now().Unix() - 7*86400)
+func (s *Server) ips(w http.ResponseWriter, r *http.Request) {
+	page, size := parsePage(r)
+	rows, total, err := s.store.QueryIPAggPage(time.Now().Unix()-7*86400, r.URL.Query().Get("q"), page, size)
 	if err != nil {
 		fail(w, 500, err.Error())
 		return
 	}
-	ok(w, rows)
+	allow, err := s.store.ListAllow()
+	if err != nil {
+		fail(w, 500, err.Error())
+		return
+	}
+	for i := range rows {
+		rows[i].Whitelisted = store.MatchAllow(allow, rows[i].SrcIP)
+	}
+	pageOK(w, rows, total, page, size)
 }
 
-func (s *Server) bans(w http.ResponseWriter, _ *http.Request) {
-	rows, err := s.store.ListBans()
+func (s *Server) bans(w http.ResponseWriter, r *http.Request) {
+	page, size := parsePage(r)
+	rows, total, err := s.store.ListBansPage(r.URL.Query().Get("q"), page, size)
 	if err != nil {
 		fail(w, 500, err.Error())
 		return
 	}
-	ok(w, rows)
+	pageOK(w, rows, total, page, size)
 }
 
 func (s *Server) postBan(w http.ResponseWriter, r *http.Request) {
@@ -353,17 +393,59 @@ func (s *Server) postUnban(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]any{"ok": true})
 }
 
+func (s *Server) listAllow(w http.ResponseWriter, r *http.Request) {
+	page, size := parsePage(r)
+	rows, total, err := s.store.ListAllowPage(r.URL.Query().Get("q"), page, size)
+	if err != nil {
+		fail(w, 500, err.Error())
+		return
+	}
+	pageOK(w, rows, total, page, size)
+}
+
+func (s *Server) postAllow(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Spec string `json:"spec"`
+		Note string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		fail(w, 400, "请求格式错误")
+		return
+	}
+	if err := s.engine.AddAllow(body.Spec, body.Note); err != nil {
+		fail(w, 400, err.Error())
+		return
+	}
+	ok(w, map[string]any{"ok": true})
+}
+
+func (s *Server) deleteAllow(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Spec string `json:"spec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		fail(w, 400, "请求格式错误")
+		return
+	}
+	if err := s.engine.RemoveAllow(body.Spec); err != nil {
+		fail(w, 400, err.Error())
+		return
+	}
+	ok(w, map[string]any{"ok": true})
+}
+
 func (s *Server) alerts(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	if status == "" {
 		status = "active"
 	}
-	rows, err := s.store.ListAlerts(status, 200)
+	page, size := parsePage(r)
+	rows, total, err := s.store.ListAlertsPage(status, r.URL.Query().Get("q"), page, size)
 	if err != nil {
 		fail(w, 500, err.Error())
 		return
 	}
-	ok(w, rows)
+	pageOK(w, rows, total, page, size)
 }
 
 func (s *Server) ackAlert(w http.ResponseWriter, r *http.Request) {

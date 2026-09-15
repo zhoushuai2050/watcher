@@ -2,9 +2,11 @@ import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BrandMark from "../components/BrandMark";
 import { useAuth } from "../lib/auth";
+import { useTheme } from "../lib/theme";
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const { theme, toggle } = useTheme();
   const navigate = useNavigate();
   const [name, setName] = useState("admin");
   const [password, setPassword] = useState("");
@@ -34,15 +36,20 @@ export default function LoginPage() {
             Watcher
           </p>
           <h1>看住这台机器。</h1>
-          <p className="lead">资源、进程、端口，还有外面谁在扫、谁在爆破。第一期只盯本机。</p>
+          <p className="lead">看资源、进程和端口，以及谁在扫描、谁在爆破。</p>
         </div>
-        <p className="muted">单机自监控 · SSH / Web / Fail2ban / 连接异常</p>
+        <p className="muted">单机监控 · SSH / Web / Fail2ban</p>
       </section>
       <section className="auth-panel">
+        <button className="btn btn-ghost theme-toggle-float" type="button" onClick={toggle}>
+          <span className={theme === "light" ? "" : "muted"}>light</span>
+          <span className="muted"> / </span>
+          <span className={theme === "dark" ? "" : "muted"}>dark</span>
+        </button>
         <form className="card auth-card" onSubmit={onSubmit}>
           <p className="eyebrow">本机面板</p>
           <h2>登录</h2>
-          <p className="hint">没有公开注册。账号写在配置里。</p>
+          <p className="hint">仅管理员可登录，账号在服务器配置中。</p>
           {error ? <div className="error">{error}</div> : null}
           <div className="field">
             <label>用户名</label>

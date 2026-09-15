@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { useAuth } from "./lib/auth";
-import AlertsPage from "./pages/AlertsPage";
 import AppShell from "./pages/AppShell";
 import LoginPage from "./pages/LoginPage";
 import NetworkPage from "./pages/NetworkPage";
@@ -57,7 +56,7 @@ export default function App() {
         <Route path="processes/view" element={<RedirectProcessView />} />
         <Route path="network" element={<NetworkPage />} />
         <Route path="security" element={<SecurityPage />} />
-        <Route path="alerts" element={<AlertsPage />} />
+        <Route path="alerts" element={<Navigate to="/" replace />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

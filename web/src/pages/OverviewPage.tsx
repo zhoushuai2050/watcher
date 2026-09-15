@@ -26,15 +26,17 @@ export default function OverviewPage() {
         kicker={
           <>
             <span className="live-dot" />
-            本机
+            实时
           </>
         }
         title={h.hostname || "Watcher"}
         desc={`${h.os || "Linux"} · 已运行 ${formatUptime(h.uptime_sec)} · ${h.cpu_cores} 核${h.temp_c != null ? ` · ${h.temp_c.toFixed(0)}°C` : ""}`}
       >
-        <Link to="/alerts" className="btn btn-primary" style={{ width: "auto" }}>
-          {data.alerts_open} 条未关闭告警
-        </Link>
+        {data.alerts_open ? (
+          <span className="chip warn">{data.alerts_open} 条未关闭告警</span>
+        ) : (
+          <span className="muted">没有未关闭告警</span>
+        )}
       </PageHeader>
       {error ? <div className="error">{error}</div> : null}
 

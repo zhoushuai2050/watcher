@@ -12,10 +12,16 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/Watcher/assets/main.css?v=84c83c95094b" />
+    <link rel="stylesheet" href="/Watcher/assets/main.css?v=e58c646f4db9" />
+    <script>
+      try {
+        var t = localStorage.getItem("watcher.theme");
+        document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/Watcher/assets/main.js?v=84c83c95094b"></script>
+    <script type="module" src="/Watcher/assets/main.js?v=e58c646f4db9"></script>
   </body>
 </html>

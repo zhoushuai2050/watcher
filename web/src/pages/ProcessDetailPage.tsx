@@ -23,7 +23,7 @@ export default function ProcessDetailPage() {
   return (
     <div className="stack">
       <PageHeader
-        kicker="应用"
+        kicker="进程"
         title={title}
         desc={latest ? `近 1 小时 · PID ${latest.pid} · CPU ${formatPct(latest.cpu, 1)} · ${formatBytes(latest.rss)}` : "近 1 小时采样"}
       >

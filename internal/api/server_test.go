@@ -108,6 +108,103 @@ func TestLoginAndOverview(t *testing.T) {
 	}
 }
 
+func TestAllowlistAPI(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "w.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := config.Defaults()
+	au := auth.New(st, cfg)
+	if err := au.Bootstrap("admin", "watcher"); err != nil {
+		t.Fatal(err)
+	}
+	defer collect.SetRunNft(func(args ...string) (string, error) { return "", nil })()
+	eng := collect.New(st, cfg)
+	det := detect.New(st, cfg, eng)
+	h := New(cfg, st, au, eng, det).Handler()
+	body, _ := json.Marshal(map[string]string{"name": "admin", "password": "watcher"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var env struct {
+		Data struct {
+			Token string `json:"access_token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil || env.Data.Token == "" {
+		t.Fatalf("login %s", rec.Body.String())
+	}
+	authz := "Bearer " + env.Data.Token
+	addBody, _ := json.Marshal(map[string]string{"spec": "203.0.113.9", "note": "home"})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/security/allow", bytes.NewReader(addBody))
+	req.Header.Set("Authorization", authz)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("add %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/security/allow", nil)
+	req.Header.Set("Authorization", authz)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte("203.0.113.9")) {
+		t.Fatalf("list %d %s", rec.Code, rec.Body.String())
+	}
+	banBody, _ := json.Marshal(map[string]string{"ip": "203.0.113.9"})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/security/bans", bytes.NewReader(banBody))
+	req.Header.Set("Authorization", authz)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 400 {
+		t.Fatalf("ban whitelist want 400 got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestLookupPrivateIP(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "w.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := config.Defaults()
+	au := auth.New(st, cfg)
+	if err := au.Bootstrap("admin", "watcher"); err != nil {
+		t.Fatal(err)
+	}
+	eng := collect.New(st, cfg)
+	det := detect.New(st, cfg, eng)
+	h := New(cfg, st, au, eng, det).Handler()
+	body, _ := json.Marshal(map[string]string{"name": "admin", "password": "watcher"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var env struct {
+		Data struct {
+			Token string `json:"access_token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil || env.Data.Token == "" {
+		t.Fatalf("login %s", rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/network/ip?ip=127.0.0.1", nil)
+	req.Header.Set("Authorization", "Bearer "+env.Data.Token)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte("本机回环地址")) {
+		t.Fatalf("lookup %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/network/ip?ip=bad", nil)
+	req.Header.Set("Authorization", "Bearer "+env.Data.Token)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 400 {
+		t.Fatalf("bad ip want 400 got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestAlertBatchAckAndResolve(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.Open(filepath.Join(dir, "w.db"))

@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
+import IpLookupModal from "../components/IpLookupModal";
 import PageHeader from "../components/PageHeader";
 import { api } from "../lib/api";
 import { formatTime } from "../lib/format";
@@ -8,6 +9,7 @@ import type { NetSnapshot } from "../lib/types";
 const palette = ["#3ee0b2", "#6aa8ff", "#f0c14d", "#ff6b7a", "#c084fc", "#8393a4"];
 
 export default function NetworkPage() {
+  const [lookupIP, setLookupIP] = useState("");
   const fetchNet = useCallback(() => api<NetSnapshot>("/api/v1/network"), []);
   const { data, error } = usePoll(fetchNet, 5000);
   const states = Object.entries(data?.states || {}).sort((a, b) => b[1] - a[1]);
@@ -15,7 +17,7 @@ export default function NetworkPage() {
 
   return (
     <div className="stack">
-      <PageHeader kicker="连接" title="网络" desc="监听端口相对白名单标记；连接按对端 IP 聚合。" />
+      <PageHeader kicker="端口" title="网络" desc="监听端口和新连接。点对端 IP 可查归属地。" />
       {error ? <div className="error">{error}</div> : null}
       <article className="card panel">
         <div className="panel-head">
@@ -91,7 +93,11 @@ export default function NetworkPage() {
               <tbody>
                 {(data?.conns || []).slice(0, 40).map((c, i) => (
                   <tr key={i}>
-                    <td className="ip">{c.src_ip}</td>
+                    <td>
+                      <button className="ip-link" type="button" onClick={() => setLookupIP(c.src_ip)}>
+                        {c.src_ip}
+                      </button>
+                    </td>
                     <td className="num">{c.dst_port}</td>
                     <td className="muted">{c.state}</td>
                     <td className="num">{c.count}</td>
@@ -102,6 +108,7 @@ export default function NetworkPage() {
           </div>
         </article>
       </div>
+      {lookupIP ? <IpLookupModal ip={lookupIP} onClose={() => setLookupIP("")} /> : null}
     </div>
   );
 }

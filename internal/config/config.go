@@ -47,7 +47,6 @@ type Settings struct {
 	NginxLog           string   `toml:"nginx_log" json:"nginx_log"`
 	Fail2banLog        string   `toml:"fail2ban_log" json:"fail2ban_log"`
 	AttackBanThreshold int      `toml:"attack_ban_threshold" json:"attack_ban_threshold"`
-	BanIgnore          []string `toml:"ban_ignore" json:"ban_ignore"`
 }
 
 func Defaults() Config {

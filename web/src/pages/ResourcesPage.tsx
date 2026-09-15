@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Chart from "../components/Chart";
 import { api } from "../lib/api";
 import { formatBps, formatPct } from "../lib/format";
@@ -11,9 +11,29 @@ const ranges = [
   { id: "24h", label: "24 小时" },
   { id: "7d", label: "7 天" },
 ];
+const RANGE_KEY = "watcher.metrics.range";
+const rangeIds = new Set(ranges.map((r) => r.id));
+
+function readRange() {
+  try {
+    const v = localStorage.getItem(RANGE_KEY) || "";
+    if (rangeIds.has(v)) return v;
+  } catch {
+    /* ignore */
+  }
+  return "1h";
+}
 
 export default function ResourcesPage() {
-  const [range, setRange] = useState("1h");
+  const [range, setRange] = useState(readRange);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(RANGE_KEY, range);
+    } catch {
+      /* ignore */
+    }
+  }, [range]);
   const fetchMetrics = useCallback(() => api<Metric[]>(`/api/v1/metrics?range=${range}`), [range]);
   const { data, error } = usePoll(fetchMetrics, 8000);
   const rows = data || [];

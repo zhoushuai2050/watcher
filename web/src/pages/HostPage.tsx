@@ -17,9 +17,9 @@ export default function HostPage() {
   return (
     <div className="stack">
       <PageHeader
-        kicker="主机"
-        title="资源"
-        desc={tab === "process" ? "按服务、容器和进程看占用。" : "按时间窗口查看 CPU、内存、磁盘和网络吞吐。"}
+        kicker="负载"
+        title={tab === "process" ? "进程" : "资源"}
+        desc={tab === "process" ? "按服务和容器看占用，点名称查看近 1 小时曲线。" : "CPU、内存、磁盘和网络曲线，可切换时间窗口。"}
       >
         <div className="range-tabs">
           <button className={tab === "resource" ? "active" : ""} onClick={() => setTab("resource")}>

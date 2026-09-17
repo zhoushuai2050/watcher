@@ -1,6 +1,8 @@
 # Watcher
 
 单机监控面板：看资源、进程、监听端口，以及 SSH 爆破、Web 扫描、Fail2ban 封禁和连接异常。超过安全页设定的攻击阈值后，可用 nftables 永久封禁来源 IP。
+<img width="1879" height="910" alt="image" src="https://github.com/user-attachments/assets/21e8311d-c0c5-4474-93e6-4614971d4d6e" />
+
 
 Go 单二进制（采集 + API + 页面），数据存在 SQLite。适合 Linux 主机，建议用 systemd 跑、Nginx 反代。
 

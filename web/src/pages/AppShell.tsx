@@ -43,17 +43,6 @@ export default function AppShell() {
             <p className="eyebrow">Watcher</p>
             <strong>本机监控</strong>
           </div>
-          <button
-            className="sidebar-fold"
-            type="button"
-            aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}
-            title={collapsed ? "展开" : "折叠"}
-            onClick={() => setCollapsed((v) => !v)}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              {collapsed ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}
-            </svg>
-          </button>
         </div>
         <nav className="side-nav">
           {links.map((link) => (
@@ -86,6 +75,18 @@ export default function AppShell() {
             {collapsed ? "退出" : "退出登录"}
           </button>
         </div>
+        <button
+          className="sidebar-fold"
+          type="button"
+          aria-label={collapsed ? "展开侧栏" : "折叠侧栏"}
+          title={collapsed ? "展开" : "折叠"}
+          onClick={() => setCollapsed((v) => !v)}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            {collapsed ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}
+          </svg>
+          <span className="fold-label">{collapsed ? "展开" : "折叠"}</span>
+        </button>
       </aside>
       <main className="content">
         <Outlet />
